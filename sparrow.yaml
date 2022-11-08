@@ -23,6 +23,7 @@ tasks:
     depends:
       -
         name: rakubrew-install
+  -
     name: rakubrew-install
     language: Bash
     code: |
