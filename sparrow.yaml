@@ -10,6 +10,7 @@ tasks:
 
       version=$(config version)
       echo "Use rakudo version: $version"
+      eval $(~/.rakubrew/bin/rakubrew init Bash)
       rakubrew download moar-$version
       rakubrew switch moar-$version
 
@@ -30,7 +31,4 @@ tasks:
     language: Bash
     code: |
       set -e
-      curl -sf https://rakubrew.org/perl/rakubrew -o rakubrew
-      sudo mv rakubrew /usr/local/bin
-      sudo chmod a+x /usr/local/bin/rakubrew
-      rakubrew mode shim
+      curl https://rakubrew.org/install-on-perl.sh | sh
