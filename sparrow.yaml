@@ -6,6 +6,8 @@ tasks:
     code: |
       cd source
       which zef
+      which raku
+      raku --version
       zef --version
       zef update 
       zef install --/test .
