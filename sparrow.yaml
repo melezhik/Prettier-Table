@@ -5,6 +5,8 @@ tasks:
     language: Bash
     code: |
       cd source
+      zef --version
+      zef update 
       zef install --/test .
     depends:
       -
