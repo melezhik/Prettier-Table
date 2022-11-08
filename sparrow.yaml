@@ -1,0 +1,33 @@
+tasks:
+  -
+    name: main
+    default: true
+    language: Bash
+    code: |
+      cd source
+      zef install --/test .
+    depends:
+      -
+        name: rakudo-install
+        config:
+          version: 2022.04
+  -
+    name: rakudo-install
+    language: Bash
+    code: |
+      set -e
+      version=$(config version)
+      echo "Use rakudo version: $version"
+      rakubrew download moar-$version
+      rakubrew switch moar-$version
+    depends:
+      -
+        name: rakubrew-install
+    name: rakubrew-install
+    language: Bash
+    code: |
+      set -e
+      curl -sf https://rakubrew.org/perl/rakubrew -o rakubrew
+      sudo mv rakubrew /usr/local/bin
+      sudo chmod a+x /usr/local/bin/rakubrew
+      rakubrew mode shim
