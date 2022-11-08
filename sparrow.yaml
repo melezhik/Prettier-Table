@@ -12,29 +12,17 @@ tasks:
     code: |
       set -e
       
-      if test $os = "debian"; then
-        sudo apt-get install -y file
-      elif test $os = "ubuntu"; then
-        sudo apt-get install -y file
-      fi 
       version=$(config version)
       echo "Use rakudo version: $version"
       eval "$(~/.rakubrew/bin/rakubrew init Bash)"
       rakubrew download moar-$version
       rakubrew switch moar-$version
-      ls -l ~/.rakubrew/versions/moar-$version/bin/
       
       cd source
-      stat ~/.rakubrew/versions/moar-$version/bin/rakudo
-      file ~/.rakubrew/versions/moar-$version/bin/rakudo
-      ldd ~/.rakubrew/versions/moar-$version/bin/rakudo
-      
-      ~/.rakubrew/versions/moar-$version/bin/rakudo --version
+
       which zef
       which raku
-      which rakudo
       
-      rakudo  --version
       raku --version
       zef --version
 
