@@ -11,7 +11,12 @@ tasks:
       version: 2022.07
     code: |
       set -e
-
+      
+      if test $os = "debian"; then
+        sudo apt-get install -y file
+      elif test $os = "ubuntu"; then
+        sudo apt-get install -y file
+      fi 
       version=$(config version)
       echo "Use rakudo version: $version"
       eval "$(~/.rakubrew/bin/rakubrew init Bash)"
