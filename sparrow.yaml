@@ -16,8 +16,13 @@ tasks:
       ls -l ~/.rakubrew/versions/moar-$version/bin/
       
       cd source
+      stat ~/.rakubrew/versions/moar-$version/bin/rakudo
+      ~/.rakubrew/versions/moar-$version/bin/rakudo --version
       which zef
       which raku
+      which rakudo
+      
+      rakudo  --version
       raku --version
       zef --version
 
