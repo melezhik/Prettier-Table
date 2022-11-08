@@ -10,7 +10,7 @@ tasks:
       -
         name: rakudo-install
         config:
-          version: 2022.04
+          version: 2022.07
   -
     name: rakudo-install
     language: Bash
