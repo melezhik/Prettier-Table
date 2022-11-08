@@ -10,7 +10,7 @@ tasks:
 
       version=$(config version)
       echo "Use rakudo version: $version"
-      eval $(~/.rakubrew/bin/rakubrew init Bash)
+      eval "$(~/.rakubrew/bin/rakubrew init Bash)"
       rakubrew download moar-$version
       rakubrew switch moar-$version
 
