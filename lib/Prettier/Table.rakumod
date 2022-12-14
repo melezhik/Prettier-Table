@@ -2,7 +2,7 @@ use Text::Wrap;
 use Prettier::Table::Constrains;
 
 
-unit class Prettier::Table:ver<1.0.0>:auth<masukomi (masukomi@masukomi.org)>;
+unit class Prettier::Table:ver<1.1.3>:auth<masukomi (masukomi@masukomi.org)>;
 #
 # Public attributes
 #
@@ -65,6 +65,7 @@ has %!min-width;
 has %!max-width;
 has $!hrule;
 has $!format = False;
+has $!markdown = False;
 
 submethod TWEAK {
     self.int-format($!int-format);
@@ -97,6 +98,7 @@ method Str( --> Str ) {
 method gist( --> Str ) {
     self.get-string
 }
+
 
 #| Return a list of field names.
 multi method field-names( --> Array ) {
@@ -161,10 +163,8 @@ multi method align( $val --> Nil ) {
         }
         elsif $val ~~ Hash {
             for $val.pairs -> $field-to-format {
-                if $field-to-format.key ∈ @!field-names {
-                    validate-align $field-to-format.value;
-                    %align{ $field-to-format.key } = $field-to-format.value
-                }
+                validate-align($field-to-format, @!field-names);
+                %align{ $field-to-format.key } = $field-to-format.value
             }
 
             # Either $val was empty or none of its fields were in the field names.
@@ -198,7 +198,7 @@ multi method valign( $val --> Nil ) {
     }
     else {
         if $val ~~ Str {
-            validate-align $val;
+            validate-valign $val;
             for @!field-names -> $field {
                 %valign{ $field } = $val;
             }
@@ -207,10 +207,8 @@ multi method valign( $val --> Nil ) {
         }
         elsif $val ~~ Hash {
             for $val.pairs -> $field-to-format {
-                if $field-to-format.key ∈ @!field-names {
-                    validate-valign $field-to-format.value;
-                    %valign{ $field-to-format.key } = $field-to-format.value
-                }
+                validate-valign($field-to-format, @!field-names);
+                %valign{ $field-to-format.key } = $field-to-format.value
             }
 
             # Either $val was empty or none of its fields were in the field names.
@@ -218,7 +216,7 @@ multi method valign( $val --> Nil ) {
                 %valign{$_} = 't' for @!field-names;
             }
 
-            $!align = %valign;
+            $!valign = %valign;
         }
         else {
             note
@@ -270,11 +268,11 @@ def min_width(self, val):
 multi method min-width( $val --> Nil ) {
     my %min-width;
     if !$val.defined {
+        # UNset the min-width of fields
         %!min-width = %min-width;
     }
     else {
         if $val ~~ Str {
-            #validate-align $val;
             for @!field-names -> $field {
                 %min-width{ $field } = $val;
             }
@@ -283,7 +281,6 @@ multi method min-width( $val --> Nil ) {
         elsif $val ~~ Hash {
             for $val.pairs -> $field-to-width {
                 if $field-to-width.key ∈ @!field-names {
-                    #validate-valign $field-to-format.value;
                     %min-width{ $field-to-width.key } = $field-to-width.value
                 }
             }
@@ -725,21 +722,28 @@ multi method old-sort-slice( Bool $val --> Nil ) {
 
 #| Set the style to be used for the table. Allowed values:
 #| DEFAULT: Show header and border, hrules and vrules are FRAME and ALL
-#| respectively, paddings are 1, vert. char is |, hor. char is -,
-#| and junction char is +.
+#| respectively, paddings are 1, ASCII Box Drawing characters used for borders.
 #| MSWORD-FRIENDLY: Show header and border, hrules is NONE, paddings are 1, and
 #| vert. char is |
+#| MARKDOWN: GitHub Flavored Markdown table. - Removes title, only hrule below
+#| column headers, paddings are 1, and vert. char is |
 #| PLAIN-COLUMNS: Show header and hide border, hrules is NONE, padding is 1,
 #| left padding is 0, and right padding is 8
 #| RANDOM: random style
-method set-style( TableStyle $style --> Nil ) {
+multi method set-style( TableStyle $style --> Nil ) {
     given $style {
-        when MSWORD-FRIENDLY { self!set-msword-style()  }
-        when PLAIN-COLUMNS   { self!set-columns-style() }
-        when RANDOM          { self!set-random-style()  }
-        when DEFAULT         { self!set-default-style() }
-        default              { self!set-default-style() }
+        when MSWORD-FRIENDLY { self!set-msword-style()   }
+        when MARKDOWN        { self!set-markdown-style() }
+        when PLAIN-COLUMNS   { self!set-columns-style()  }
+        when RANDOM          { self!set-random-style()   }
+        when DEFAULT         { self!set-default-style()  }
+        default              { self!set-default-style()  }
     }
+}
+multi method set-style( Str $string_style --> Nil ) {
+    my $style = TableStyle::{$string_style};
+    die "Unknown style $string_style" unless $style.defined;
+    self.set-style($style);
 }
 
 method !set-default-style( --> Nil ) {
@@ -760,14 +764,43 @@ method !set-default-style( --> Nil ) {
 }
 
 method !set-msword-style( --> Nil ) {
-    $!header = True;
-    $!border = True;
-    $!hrules = NONE;
-    $!padding-width = 1;
-    $!left-padding-width = 1;
-    $!right-padding-width = 1;
-    $!vertical-char = "|";
+    $!header                = True;
+    $!border                = True;
+    $!hrules                = NONE;
+    $!padding-width         = 1;
+    $!left-padding-width    = 1;
+    $!right-padding-width   = 1;
+    $!vertical-char         = '|';
+    $!top-left-corner-char  = '+';
+    $!top-right-corner-char = '+';
+    $!horizontal-char       = '-';
 }
+#| modifies border characters to produce markdown output
+method !set-markdown-style( --> Nil ){
+    $!markdown = True;
+    $!title = Nil;
+    $!hrules = HEADER;
+    $!vrules = ALL;
+    $!vertical-char = '|';
+    $!horizontal-char= '-';
+    $!junction-char = '|';
+    $!left-junction-char = '|';
+    $!right-junction-char = '|';
+    $!top-junction-char = Nil;
+    $!bottom-junction-char = Nil;
+    # NOTE: alignment is handled via the heading line.
+    # colons indicate alignment
+    #
+    # |----| => no alignment specified
+    # |:---| => left aligned
+    # |---:| => right aligned
+    # |:--:| => center aligned
+    #
+    # NOTE: there is no colspan functionality
+    # so title will look like crap
+    # TODO: Make title's optional
+}
+
 
 method !set-columns-style( --> Nil ) {
     $!header = True;
@@ -975,19 +1008,18 @@ method !prepare-lines( *%_ ) {
     my @lines;
 
     # Add title
-    @lines.push(self!stringify-title($!title)) if $!title.defined;
+    @lines.push(self!stringify-title($!title)) if $!title.defined and ! $!markdown;
     # Add header or top of border
 
     if $!header and $!title.defined {
-        @lines.append(self!stringify-header(row=>'header-middle').split("\n"));
+        @lines.append(self!stringify-header(row=>'header-middle').split(/\r\n|\n/));
     } elsif $!header {
-        @lines.append(self!stringify-header(row=>'header-top').split("\n"));
+        @lines.append(self!stringify-header(row=>'header-top').split(/\r\n|\n/));
     } elsif $!border and $!hrules ∈ (ALL, FRAME) {
         @lines.push(self!stringify-hrule(row => 'top'));
     }
 
-    # Add rows
-    #
+    # Add rows of content (after title and headers)
     loop (my $i = 0; $i < @formatted-rows.elems; $i++) {
 
         if $i < @formatted-rows.elems - 1 {
@@ -1016,28 +1048,58 @@ method !prepare-lines( *%_ ) {
     return @lines;
 }
 
-method !stringify-hrule( Str :$row = 'middle' ) {
+method !stringify-hrule( Str :$row = 'middle', Positional :$alignments?) {
     return "" unless $!border;
+    # FIXME won't work if no field names
+    my @aligns = $alignments // \
+                  ("c" x @!field-names.elems).split("",:skip-empty);
+
     my ($lpad, $rpad) = self!get-padding-widths;
     my @bits;
 
-    if $!vrules ∈  (ALL, FRAME).one {
-       @bits.push($!left-junction-char)       if $row eq 'middle' or $row eq 'header-bottom' or $row eq 'header-middle';
-       @bits.push($!top-left-corner-char)     if $row eq 'top' or $row eq 'header-top' ;
-       @bits.push($!bottom-left-corner-char)  if $row eq 'bottom';
+    if ! $!markdown and $!vrules ∈  (ALL, FRAME).one {
+        @bits.push($!left-junction-char)       if $row eq 'middle' or $row eq 'header-bottom' or $row eq 'header-middle';
+        @bits.push($!top-left-corner-char)     if $row eq 'top' or $row eq 'header-top' ;
+        @bits.push($!bottom-left-corner-char)  if $row eq 'bottom';
+    } elsif $!markdown {
+        @bits.push($!left-junction-char) if $row eq 'middle' or $row eq 'header-bottom'
     }
     else {
         @bits.push($!horizontal-char)
     }
 
     unless @!field-names {
+        # FIXME this can't be right with new complex junction possibilities
         @bits.push($!junction-char);
         return @bits.join
     }
 
-    for (@!field-names Z @!widths) -> ($field, $width) {
+    for (@!field-names Z @!widths Z @aligns) -> ($field, $width, $align) {
+ if @!fields and $field ∉  @!fields {
+} else {
+ }
+
         next if @!fields and $field ∉  @!fields;
-        @bits.push($!horizontal-char x ($width + $lpad + $rpad));
+        my $padded_width = $width + $lpad + $rpad;
+
+        if $!markdown {
+            given $align {
+                when 'l' {
+                    @bits.push(':' ~ ( $!horizontal-char x ($padded_width - 1)) );
+                }
+                when 'r' {
+                    @bits.push( ($!horizontal-char x ($padded_width - 1)) ~ ':' );
+                }
+                default {
+                    @bits.push($!horizontal-char x $padded_width);
+                }
+            }
+
+        } else {
+            @bits.push($!horizontal-char x $padded_width);
+        }
+
+
         if $!vrules {
             @bits.push($!junction-char)         if $row eq 'middle' or $row eq 'header-bottom';
             @bits.push($!top-junction-char)     if $row eq 'top'    or $row eq 'header-top' or $row eq 'header-middle';
@@ -1054,13 +1116,14 @@ method !stringify-hrule( Str :$row = 'middle' ) {
         @bits[*-1] = $!top-right-corner-char     if $row eq 'top' or $row eq 'header-top';
     }
 
-    if $!vrules ~~ FRAME {
+    if $!vrules ~~ FRAME { # markdown is ALL
         @bits.pop;
         @bits.push($!right-junction-char)       if $row eq 'middle' or $row eq 'header-middle' or $row eq 'header-bottom';
         @bits.push($!top-right-corner-char)     if $row eq 'top' or $row eq 'header-top' ;
         @bits.push($!bottom-right-corner-char)  if $row eq 'bottom';
     }
-    @bits.join('')
+
+    @bits.join('');
 }
 
 method !stringify-title( $title is copy --> Str ) {
@@ -1080,10 +1143,7 @@ method !stringify-title( $title is copy --> Str ) {
     my $endpoint = $!vrules == (ALL, FRAME).one ?? $!vertical-char !! " ";
     @bits.push($endpoint);
     $title = (' ' x $lpad, $title, ' ' x $rpad).join;
-    # TODO: Make sure to change self!stringify-hrule to $!hrule
     my $hrule = self!stringify-hrule(row => 'header-bottom');
-    # top because we don't want lines poking up, but we do want lines
-    # poking down, because this is the "top" of the following table
 
     @bits.push(self!justify($title, $hrule.chars - 2, 'c'));
     @bits.push($endpoint);
@@ -1118,11 +1178,11 @@ method !stringify-header(Str :$row = 'header-top') {
         }
     }
 
+    my @column_alignments = [];
     for (@!field-names Z @!widths) -> ($field, $width) {
         if @!fields and $field ∉  @!fields {
             next
         }
-
         my $fieldname = do given $!header-style {
             when 'cap'   { $field.tc }
             when 'title' { $field.tc }
@@ -1132,6 +1192,7 @@ method !stringify-header(Str :$row = 'header-top') {
         }
 
         @bits.push(" " x $lpad ~ self!justify($fieldname, $width, $!align{$field} // 'c') ~ " " x $rpad);
+        @column_alignments.push($!align{$field} // 'c');
         if $!border {
             if $!vrules ~~ ALL {
                 @bits.push($!vertical-char)
@@ -1152,14 +1213,15 @@ method !stringify-header(Str :$row = 'header-top') {
     if $!border and $!hrules !~~ NONE {
         @bits.push("\n");
         my $hrule-row = ($row eq 'header-middle' or $row eq 'header-top') ?? 'header-bottom' !! $row;
-        @bits.push(self!stringify-hrule(row=>$hrule-row));
+        @bits.push(self!stringify-hrule(row=>$hrule-row, alignments => @column_alignments));
     }
     return @bits.join('')
 }
 
 method !stringify-row( @row, Str :$row-position = 'middle' --> Str ) {
     for 0..^@row.elems Z @!field-names Z @row Z @!widths -> ($index, $field, $value, $width) {
-        my @lines = $value.split("\n");
+        my $guaranteed_value = Nil ~~ $value ?? '' !! $value;
+        my @lines = $guaranteed_value.split(/\r\n|\n/);
         my @new-lines;
         for @lines <-> $line {
             if self!str-block-width($line) > $width {
@@ -1189,7 +1251,8 @@ method !stringify-row( @row, Str :$row-position = 'middle' --> Str ) {
 
     for @!field-names.flat Z @row.flat Z @!widths.flat -> ($field, $value, $width) {
         my $valign = $!valign{$field};
-        my @lines = $value.split("\n");
+        my $guaranteed_value = Nil ~~ $value ?? '' !! $value;
+        my @lines = $guaranteed_value.split(/\r\n|\n/);
         my $height-diff = $row-height - @lines.elems;
         if $height-diff {
             given $valign {
@@ -1258,7 +1321,9 @@ method !justify( Str $text, Int $width, Str $align --> Str ) {
 }
 
 method !get-size( $text --> Hash ) {
-    my @lines = $text.split("\n");
+    return %(width => 0, height => 0) if Nil ~~ $text;
+
+    my @lines = $text.split(/\r\n|\n/);
     my $height = @lines.elems;
     my $width = @lines.map({ self!str-block-width($^line) }).max;
     return %( :$width, :$height );
@@ -1329,7 +1394,6 @@ method slice( *@indices --> Prettier::Table ) {
 # See https://stackoverflow.com/a/60061569
 # multi sub postcircumfix:<[ ]> ( Prettier::Table $n, $index, *@indices ) is default is export {
 #     die("death in postcircumfix");
-#     say("XXX in postcircumfix: $n, $index, " ~ @indices.raku );
 #     #$n.slice(|$index, |@indices)
 # }
 
@@ -1482,11 +1546,12 @@ method !format-rows( @rows --> List ) {
 C<Prettier::Table>, a simple Raku module to make it quick and easy to represent
 tabular data in visually appealing ASCII tables.
 
+By default it will generate tables using ASCII Box Drawing characters as show in
+the examples below. But you can also generate L<GFM Markdown tables|https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/organizing-information-with-tables>, and MS Word Friendly tables by calling C<$my_table.set-style('MARKDOWN')> or C<$my_table.set-style('MSWORD-FRIENDLY')> Check out C<demo.raku> to see this in action.
+
 
 This is a fork of L<Luis F Uceta's Prettier::Table|https://gitlab.com/uzluisf/raku-pretty-table> which is itself a port of
 the L<Kane Blueriver's PTable library for Python|https://github.com/kxxoling/PTable>.
-I (L<masukomi|https://masukomi.org>) have modifed it to use ASCII Box drawing characters
-so as to make it "prettier".
 
 =head1 Synopsis
 
@@ -1517,7 +1582,7 @@ say $table;
 
 Output:
 
-<img alt="actual rendering" src="https://github.com/masukomi/Prettier-Table/blob/main/images/australian_cities.png?raw=true" />
+<img alt="actual rendering" src="https://github.com/masukomi/Prettier-Table/blob/images/images/australian_cities.png?raw=true" />
 
 (GitHub displays the raw text incorrectly)
 
@@ -1568,7 +1633,7 @@ put $table;
 
 Output:
 
-<img alt="actual rendering" src="https://github.com/masukomi/Prettier-Table/blob/main/images/planets_of_the_solar_system.png?raw=true" />
+<img alt="actual rendering" src="https://github.com/masukomi/Prettier-Table/blob/images/images/planets_of_the_solar_system.png?raw=true" />
 
 (GitHub displays the raw text incorrectly)
 =begin code

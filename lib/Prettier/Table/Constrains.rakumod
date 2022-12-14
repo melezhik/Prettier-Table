@@ -1,3 +1,4 @@
+use Listicles;
 unit module Prettier::Table::Constrains;
 
 #
@@ -11,7 +12,7 @@ unit module Prettier::Table::Constrains;
 #   NONE, nothing has rules
 enum hrules-enum is export <FRAME ALL NONE HEADER>;
 
-enum TableStyle is export (:10DEFAULT, :11MSWORD-FRIENDLY, :12PLAIN-COLUMNS, :20RANDOM);
+enum TableStyle is export (:10DEFAULT, :11MSWORD-FRIENDLY, :12PLAIN-COLUMNS, :20RANDOM, :21MARKDOWN);
 
 #
 # Subsets
@@ -60,16 +61,26 @@ sub validate-format( $val --> Bool ) {
 subset Format is export
 where validate-format($_) || die 'Format must be a string or a hash of field-to-format pairs.';
 
-sub validate-align( $val ) is export {
+
+multi sub validate-align($val){
     die "Alignment must be a string." unless $val ~~ Str;
-    die "Value ($_) must be a single character." unless $val.chars == 1;
+    die "Alignment Value ($_) must be a single character." unless $val.chars == 1;
     die "Alignment ($_) is invalid. Use l, c, or r." unless $val ~~ Align;
 }
+multi sub validate-align( Pair $align-pair, @field-names ) is export {
+    validate-align($align-pair.value);
+    die "Alignment column \"" ~ $align-pair.key ~ "\" is not a known column." unless  @field-names.grep($align-pair.key);
+}
 
-sub validate-valign( $val ) is export {
-    die "Alignment must be a string." unless $val ~~ Str;
-    die "Value ($_) must be a single character." unless $val.chars == 1;
-    die "Alignment ($_) is invalid. Use t, m, or b." unless $val ~~ VAlign;
+multi sub validate-valign( $val ) is export {
+    die "Vertical Alignment must be a string." unless $val ~~ Str;
+    die "Vertical Alignment Value ($_) must be a single character." unless $val.chars == 1;
+    die "Vertical Alignment ($_) is invalid. Use t, m, or b." unless $val ~~ VAlign;
+}
+multi sub validate-valign(Pair $valign-pair, @field-names){
+    validate-valign($valign-pair.value);
+    die "Vertical Alignment column \"" ~ $valign-pair.key ~ "\" is not a known column." unless  @field-names.grep($valign-pair.key);
+
 }
 
 
